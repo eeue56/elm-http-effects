@@ -33,7 +33,7 @@ update : Action -> Model -> (Model, Cmd Action)
 update action model = 
     case action of
         LoadUsers users ->
-            ( { model | users = users }, Cmd.none )
+            ( { model | users = model.users ++ users }, Cmd.none )
 
         GetUsers ->
             ( model, Http.send Http.Get "/users" (Json.Encode.string "") )

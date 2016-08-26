@@ -109,6 +109,7 @@ sendMessagesHelp router cmds =
                 url  
                 msg
                 { onMessage = \method name msg -> Platform.sendToSelf router (Receive (method, name) msg) }
+                &> (sendMessagesHelp router rest)
 
     
 
