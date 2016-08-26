@@ -28,6 +28,8 @@ type alias Model =
 type Action 
     = LoadUsers (List User)
     | GetUsers 
+    | GetDave
+    | FailedToLoad String
 
 update : Action -> Model -> (Model, Cmd Action)
 update action model = 
@@ -37,6 +39,12 @@ update action model =
 
         GetUsers ->
             ( model, Http.send Http.Get "/users" (Json.Encode.string "") )
+
+        GetDave ->
+            (model, Http.send Http.Get "/dave" (Json.Encode.string ""))
+
+        FailedToLoad msg ->
+            (model, Cmd.none)
 
 
 
@@ -48,23 +56,35 @@ decodeUsers =
 loadUsers : Json.Decode.Value -> Action
 loadUsers value = 
     case Json.Decode.decodeValue decodeUsers value of
-        Err _ ->
-            LoadUsers [ "wrong" ]
+        Err msg ->
+            FailedToLoad msg
         Ok users ->
             LoadUsers users
+
+loadDave : Json.Decode.Value -> Action 
+loadDave value = 
+    case Json.Decode.decodeValue Json.Decode.string value of
+        Err msg ->
+            FailedToLoad msg
+        Ok dave ->
+            LoadUsers [ dave ]
 
 
 subs : Model -> Sub Action
 subs model = 
-    Sub.batch
-        [ Http.listen Http.Get "/users" loadUsers
-        ]
+    [ Http.listen Http.Get "/users" loadUsers
+    , Http.listen Http.Get "/dave" loadDave
+    ]
+        |> Sub.batch
 
 
 view : Model -> Html Action 
 view model = 
     div 
         []
-        ( [ div [ onClick GetUsers ] [ text "click to get users" ] ] ++ 
+        ( [ div [ onClick GetUsers ] [ text "click to get users" ]
+          , div [ onClick GetDave ] [ text "click to get dave" ] 
+          ] 
+            ++ 
             List.map (\user -> text user) model.users
         )
