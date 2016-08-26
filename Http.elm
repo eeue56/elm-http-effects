@@ -45,6 +45,13 @@ listen method url tagger =
     subscription (Listen method url tagger)
 
 
+sendAndListen : Method -> Url -> Json.Value -> (Json.Value -> msg) -> (Cmd msg, Sub msg)
+sendAndListen method url value tagger =
+    ( send method url value
+    , listen method url tagger 
+    )
+
+
 subMap : (a -> b) -> MySub a -> MySub b
 subMap func sub =
   case sub of

@@ -24,6 +24,8 @@ type alias User = String
 type alias Model = 
     { users : List String }
 
+(getDave, receiveDave) = Http.sendAndListen Http.Get "/dave"  (Json.Encode.string "") loadDave
+
 
 type Action 
     = LoadUsers (List User)
@@ -41,7 +43,7 @@ update action model =
             ( model, Http.send Http.Get "/users" (Json.Encode.string "") )
 
         GetDave ->
-            (model, Http.send Http.Get "/dave" (Json.Encode.string ""))
+            ( model, getDave )
 
         FailedToLoad msg ->
             (model, Cmd.none)
@@ -73,7 +75,7 @@ loadDave value =
 subs : Model -> Sub Action
 subs model = 
     [ Http.listen Http.Get "/users" loadUsers
-    , Http.listen Http.Get "/dave" loadDave
+    , receiveDave
     ]
         |> Sub.batch
 
