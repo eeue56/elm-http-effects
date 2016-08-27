@@ -24,14 +24,18 @@ type alias User = String
 type alias Model = 
     { users : List String }
 
-(getDave, receiveDave) = Http.sendAndListen Http.Get "/dave"  (Json.Encode.string "") loadDave
+getAndRegisterDave : Cmd Action
+getAndRegisterDave = 
+    Http.sendAndSub Http.Get "/dave" (Json.Encode.string "") loadDave
 
 
 type Action 
     = LoadUsers (List User)
     | GetUsers 
     | GetDave
+    | GetDaveWithAutoSub
     | FailedToLoad String
+
 
 update : Action -> Model -> (Model, Cmd Action)
 update action model = 
@@ -40,10 +44,13 @@ update action model =
             ( { model | users = model.users ++ users }, Cmd.none )
 
         GetUsers ->
-            ( model, Http.send Http.Get "/users" (Json.Encode.string "") )
+            ( model, Http.sendAndSub Http.Get "/users" (Json.Encode.string "") loadUsers )
 
         GetDave ->
-            ( model, getDave )
+            ( model, Http.sendAndSub Http.Get "/dave" (Json.Encode.string "") loadDave )
+
+        GetDaveWithAutoSub ->
+            ( model, getAndRegisterDave )
 
         FailedToLoad msg ->
             (model, Cmd.none)
@@ -74,8 +81,7 @@ loadDave value =
 
 subs : Model -> Sub Action
 subs model = 
-    [ Http.listen Http.Get "/users" loadUsers
-    , receiveDave
+    [ Http.listenToAll
     ]
         |> Sub.batch
 
@@ -86,6 +92,7 @@ view model =
         []
         ( [ div [ onClick GetUsers ] [ text "click to get users" ]
           , div [ onClick GetDave ] [ text "click to get dave" ] 
+          , div [ onClick GetDaveWithAutoSub ] [ text "click to get dave with auto sub" ] 
           ] 
             ++ 
             List.map (\user -> text user) model.users

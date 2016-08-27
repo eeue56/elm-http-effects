@@ -23,7 +23,8 @@ toDictTuple method url =
 
 
 type MyCmd msg
-  = Send Method String Json.Value
+  = Send Method Url Json.Value
+  | SendAndSub Method Url Json.Value (Json.Value -> msg)
 
 
 send : Method -> Url -> Json.Value -> Cmd msg
@@ -32,18 +33,26 @@ send method url value =
 
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
-cmdMap _ (Send method url value) =
-  Send method url value
+cmdMap f cmd =
+  case cmd of
+    (Send method url value) -> 
+      Send method url value
 
+    (SendAndSub method url value tagger) -> 
+      SendAndSub method url value (tagger >> f)
 
 type MySub msg
   = Listen Method Url (Json.Value -> msg)
+  | All 
 
 
 listen : Method -> Url -> (Json.Value -> msg) -> Sub msg 
 listen method url tagger =
     subscription (Listen method url tagger)
 
+listenToAll : Sub msg 
+listenToAll =
+    subscription All
 
 sendAndListen : Method -> Url -> Json.Value -> (Json.Value -> msg) -> (Cmd msg, Sub msg)
 sendAndListen method url value tagger =
@@ -51,12 +60,18 @@ sendAndListen method url value tagger =
     , listen method url tagger 
     )
 
+sendAndSub : Method -> Url -> Json.Value -> (Json.Value -> msg) -> Cmd msg
+sendAndSub method url value tagger =
+    command (SendAndSub method url value tagger)
+
 
 subMap : (a -> b) -> MySub a -> MySub b
 subMap func sub =
   case sub of
     Listen method url tagger ->
       Listen method url (tagger >> func)
+    All ->
+      All
 
 
 -- MANAGER
@@ -95,12 +110,28 @@ onEffects router cmds subs state =
     sendMessagesGetNewQueues =
       sendMessagesHelp router cmds
 
+    subsFromCmds = 
+      getNewSubs cmds
+
     newSubs =
-      buildSubDict subs Dict.empty
+      buildSubDict (subs ++ subsFromCmds) Dict.empty
   in
     sendMessagesGetNewQueues 
         |> Task.map (\nothing -> { subs = newSubs })
 
+
+getNewSubs : List (MyCmd msg) -> List (MySub msg)
+getNewSubs cmds =
+    let 
+
+      getNewSub cmd =
+        case cmd of
+          SendAndSub method url msg tagger -> 
+            Just (Listen method url tagger)   
+          _ -> 
+            Nothing
+    in
+      List.filterMap getNewSub cmds
 
 
 
@@ -118,6 +149,15 @@ sendMessagesHelp router cmds =
                 { onMessage = \method name msg -> Platform.sendToSelf router (Receive (method, name) msg) }
                 &> (sendMessagesHelp router rest)
 
+        SendAndSub method url msg tagger :: rest ->
+            LowHttp.send 
+                (methodToString method)
+                url 
+                msg 
+                { onMessage = \method name msg -> Platform.sendToSelf router (Receive (method, name) msg) }
+                &> (sendMessagesHelp router rest)
+
+
     
 
 {-| adds a new sub to the dict of subs
@@ -130,6 +170,9 @@ buildSubDict subs dict =
 
     Listen method url tagger :: rest ->
       buildSubDict rest (Dict.update (toDictTuple method url) (add tagger) dict)
+
+    All :: rest ->
+      buildSubDict rest dict
 
 
 add : a -> Maybe (List a) -> Maybe (List a)
@@ -160,3 +203,4 @@ onSelfMsg router selfMsg state =
             |> List.map (\tagger -> Platform.sendToApp router (tagger msg))
       in
         Task.sequence sends &> Task.succeed state
+
