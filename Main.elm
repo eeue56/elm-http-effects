@@ -7,12 +7,13 @@ import Html.App
 import Http
 import Json.Decode
 import Json.Encode
+import ShowUser
 
 
 main : Program Never
 main = 
     Html.App.program 
-        { init = ({ users = []}, Cmd.none) 
+        { init = ({ users = [], name = ""}, Cmd.none) 
         , update = update
         , view = view
         , subscriptions = subs
@@ -22,7 +23,9 @@ main =
 type alias User = String
 
 type alias Model = 
-    { users : List String }
+    { users : List String
+    , name : String
+    }
 
 getAndRegisterDave : Cmd Action
 getAndRegisterDave = 
@@ -35,6 +38,7 @@ type Action
     | GetDave
     | GetDaveWithAutoSub
     | FailedToLoad String
+    | UserLevel ShowUser.Action
 
 
 update : Action -> Model -> (Model, Cmd Action)
@@ -54,6 +58,15 @@ update action model =
 
         FailedToLoad msg ->
             (model, Cmd.none)
+
+        UserLevel newAction ->
+            let 
+                (newName, cmd) =
+                    ShowUser.update newAction model.name       
+            in 
+                ( { model | name = newName }
+                , Cmd.map UserLevel cmd
+                )
 
 
 
@@ -82,6 +95,7 @@ loadDave value =
 subs : Model -> Sub Action
 subs model = 
     [ Http.listenToAll
+    , Sub.map UserLevel (ShowUser.subs model.name)
     ]
         |> Sub.batch
 
@@ -90,7 +104,8 @@ view : Model -> Html Action
 view model = 
     div 
         []
-        ( [ div [ onClick GetUsers ] [ text "click to get users" ]
+        ( [ Html.App.map UserLevel (ShowUser.view model.name)
+          , div [ onClick GetUsers ] [ text "click to get users" ]
           , div [ onClick GetDave ] [ text "click to get dave" ] 
           , div [ onClick GetDaveWithAutoSub ] [ text "click to get dave with auto sub" ] 
           ] 
